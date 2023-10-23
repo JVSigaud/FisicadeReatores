@@ -52,25 +52,35 @@ begin
 	Λ = 0.00001
 	Ρ(t) = 10^-5*(1.5-t)
 	ρ = @SVector [0.0001,-0.001,Ρ]
+
+	
 end
 
 # ╔═╡ 788650a2-91f5-4ed4-8ada-e5fb689d0b6a
-struct Params
-    ρ
-    λᵢ
-    βᵢ
-    β
-    Λ
+begin
+	struct Params
+	    ρ
+	    λᵢ
+	    βᵢ
+	    β
+	    Λ
+	end
+	function (p::Params)(t::Float64)
+		if eltype(p.ρ) == Float64
+			return p.ρ
+		else
+			return p.ρ(t)
+		end
+	end
 end
 
 # ╔═╡ 6d422698-577e-42d4-9d20-5e48b6bdbbaf
 begin
-	tspan = (0,10)
-	param = Params(ρ[2],λᵢ,βᵢ,β,Λ)
+	tspan = (0,5)
+	param = Params(ρ[3],λᵢ,βᵢ,β,Λ)
 	u₀ = zeros(7)
 	u₀[1] = 1.0
 	u₀[2:7] = βᵢ ./ (λᵢ .* Λ)
-	u₀
 	ΔT = 0.0001
 end
 
@@ -145,30 +155,38 @@ C_6(t)
 \end{bmatrix}$"
 
 # ╔═╡ f262c7c1-97c6-4414-9c35-ca6d214098a6
-A = Matrix{Float64}(undef,7,7)
+A = Matrix{Float64}(undef,7,7);
 
 # ╔═╡ 9a2a1ce1-f264-48e5-8926-ddce319ee4b0
-uₜ= Matrix{Float64}(undef,size(A)[1],Int(cld((tspan[2]-tspan[1])/ΔT,1)))
+begin
+	uₜ = Matrix{Float64}(undef,size(A)[1],Int(cld((tspan[2]-tspan[1])/ΔT,1)))
+	t = LinRange(tspan[1],tspan[2],size(uₜ)[2])
+	tᵨ = Ρ.(t)
+end
 
 # ╔═╡ 8b7dd7a4-21ba-43f7-ad45-96c4afe2789c
-uₜ[:,1] .= u₀
+uₜ[:,1] .= u₀;
 
 # ╔═╡ 6d688c28-3ad0-42fb-8211-377dd1e251ba
 uₜ
 
 # ╔═╡ eeb519bd-55bd-4304-ab00-7e2f9f78c270
-function PonctualKineticsMatrix!(A::Matrix,p::Params)
-	A[1] = ((p.ρ - p.β)/p.Λ)
+function PonctualKineticsMatrix!(A::Matrix,p::Params,t::Float64 = 0.0)
+	A[1] = ((p(t) - p.β)/p.Λ)
 	A[1,2:7] .= p.λᵢ
     for i in eachindex(p.λᵢ)
 		A[i+1,1:7] .= zeros(Float64,7)
         A[i+1,1] = p.βᵢ[i]/p.Λ
         A[i+1,i+1] =  -p.λᵢ[i]
+		
     end
-end
+end;
 
 # ╔═╡ 47ea2c9f-4018-47bc-80b0-cf70d005eb0e
 PonctualKineticsMatrix!(A,param)
+
+# ╔═╡ f2487cc1-7520-4e91-a5a8-53db4284c4e5
+reactivity!(A::Matrix,p::Params,t::Float64 = 0.0) = A[1] = ((p(t) - p.β)/p.Λ)
 
 # ╔═╡ 86a91448-5f8e-42bb-9b18-0a3b83cc3e99
 # begin
@@ -180,16 +198,17 @@ PonctualKineticsMatrix!(A,param)
 # end
 
 # ╔═╡ 4c59d8e7-c9fd-4ea8-b850-b7f0eee52730
-function PonctualKinetics!(matrix::Matrix,uₜ::Matrix,ΔT::Float64)
-	@inbounds for i in 1:size(uₜ)[2]
+function PonctualKinetics!(matrix::Matrix,uₜ::Matrix,ΔT::Float64,t::LinRange,param::Params)
+	@inbounds for i in 1:size(uₜ)[2]-1
 			u = @views uₜ[:,i]
 			uₜ[:,i+1] =  (matrix * u).*ΔT .+ u
+			reactivity!(matrix,param,t[i + 1])
 	end
 	
 end;
 
 # ╔═╡ c05b9f15-fcf0-42c4-80c8-dd5ddf3d8bbb
-plot(LinRange(tspan[1],tspan[2],size(uₜ)[2]),uₜ[1,:])
+plot(t,uₜ[1,:])
 
 # ╔═╡ 1bb820d1-2854-4796-8657-7d0362d35e4c
 begin
@@ -272,7 +291,7 @@ uₜ
 begin
 function PonctualKinetics!(du,u,p,t)
     Cᵢ = @views u[2:7]
-    du[1] = ((p.ρ - p.β)/p.Λ)*u[1] + sum(p.λᵢ .* Cᵢ)
+    du[1] = ((p.ρ(t) - p.β)/p.Λ)*u[1] + sum(p.λᵢ .* Cᵢ)
     for i in eachindex(p.λᵢ)
         du[i+1] = p.βᵢ[i]/p.Λ * u[1] - p.λᵢ[i] * Cᵢ[i]
         
@@ -282,11 +301,11 @@ end
 
 prob = ODEProblem(PonctualKinetics!,u₀,tspan,param)
 
-sol = solve(prob,Vern9(),dt=ΔT)
+sol = solve(prob,Vern9(),dt=ΔT,reltol=10^-8)
 end
 
 # ╔═╡ 2e1c1af7-33b7-4e69-bdb5-b06c5ffeadaf
-PonctualKinetics!(A,uₜ,ΔT)
+PonctualKinetics!(A,uₜ,ΔT,t,param)
 
 # ╔═╡ 4968a7c8-45c7-444e-839e-1c172e9111b3
 begin
@@ -2031,9 +2050,9 @@ version = "1.4.1+1"
 # ╠═bae640ce-5d9c-4842-9781-a5dae4d5a54d
 # ╟─4f9c70b3-9996-4642-80e5-19fa269d6d2c
 # ╠═d5adf4c5-712d-46ed-8877-39282ae9d212
-# ╠═788650a2-91f5-4ed4-8ada-e5fb689d0b6a
 # ╠═6d422698-577e-42d4-9d20-5e48b6bdbbaf
 # ╠═9a2a1ce1-f264-48e5-8926-ddce319ee4b0
+# ╠═788650a2-91f5-4ed4-8ada-e5fb689d0b6a
 # ╠═8b7dd7a4-21ba-43f7-ad45-96c4afe2789c
 # ╠═6d688c28-3ad0-42fb-8211-377dd1e251ba
 # ╟─e067da7e-5f39-45db-bb05-6eb9ce35eb7c
@@ -2045,6 +2064,7 @@ version = "1.4.1+1"
 # ╠═f262c7c1-97c6-4414-9c35-ca6d214098a6
 # ╠═eeb519bd-55bd-4304-ab00-7e2f9f78c270
 # ╠═47ea2c9f-4018-47bc-80b0-cf70d005eb0e
+# ╠═f2487cc1-7520-4e91-a5a8-53db4284c4e5
 # ╟─86a91448-5f8e-42bb-9b18-0a3b83cc3e99
 # ╠═4c59d8e7-c9fd-4ea8-b850-b7f0eee52730
 # ╠═2e1c1af7-33b7-4e69-bdb5-b06c5ffeadaf
@@ -2056,7 +2076,7 @@ version = "1.4.1+1"
 # ╟─5392bb3a-5bc6-4721-91bb-f392244a8abe
 # ╟─909b1895-aa9f-4938-a101-458af0efe241
 # ╠═8e742813-ca1f-4028-b8d5-0a78ca6c31a0
-# ╟─04043eb1-f5f0-43a0-b25b-9abbf2ffd290
+# ╠═04043eb1-f5f0-43a0-b25b-9abbf2ffd290
 # ╟─535e0633-05fe-4c45-9f7f-6b8fe7e1f6c2
 # ╠═31283ab5-cc22-4459-a2f2-c1d4fb3f3c02
 # ╟─36025d2d-401d-4f0b-ae3c-3195c36f9971
