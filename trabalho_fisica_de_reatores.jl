@@ -44,6 +44,15 @@ md"##### Professor: Fernando Carvalho"
 # ╔═╡ 4f9c70b3-9996-4642-80e5-19fa269d6d2c
 set_default(fmt = FancyNumberFormatter(5), convert_unicode = false)
 
+# ╔═╡ e988b980-7f64-4168-b58f-6e8b69460341
+md"# Cinética pontual"
+
+# ╔═╡ 9e67616e-fc98-4f09-9212-54c29081766c
+md"$$\begin{aligned}
+\frac{d n}{d t} & =\left[\frac{\rho(t)-\beta}{\Lambda}\right] n(t)+\sum_{i=1}^6 \lambda_i C_i(t), \\
+\frac{d C_i}{d t} & =\frac{\beta_i}{\Lambda} n(t)-\lambda_i C_i(t), \quad i=1, \ldots, 6 .
+\end{aligned}$$"
+
 # ╔═╡ d5adf4c5-712d-46ed-8877-39282ae9d212
 begin
 	λᵢ = @SVector [0.0127,0.0317,0.115,0.311,1.4,3.87]
@@ -51,10 +60,18 @@ begin
 	β = sum(βᵢ)
 	Λ = 0.00001
 	Ρ(t) = 10^-5*(1.5-t)
-	ρ = @SVector [0.0001,-0.001,Ρ]
+	ρ = @SVector [0.0001,-0.001,Ρ] 
+	ρ
+end;
 
-	
-end
+# ╔═╡ 6d422698-577e-42d4-9d20-5e48b6bdbbaf
+begin
+	tspan = (0,5)
+	u₀ = zeros(7)
+	u₀[1] = 1.0
+	u₀[2:7] = βᵢ ./ (λᵢ .* Λ)
+	ΔT = 0.0001;
+end;
 
 # ╔═╡ 788650a2-91f5-4ed4-8ada-e5fb689d0b6a
 begin
@@ -72,16 +89,6 @@ begin
 			return p.ρ(t)
 		end
 	end
-end
-
-# ╔═╡ 6d422698-577e-42d4-9d20-5e48b6bdbbaf
-begin
-	tspan = (0,5)
-	param = Params(ρ[3],λᵢ,βᵢ,β,Λ)
-	u₀ = zeros(7)
-	u₀[1] = 1.0
-	u₀[2:7] = βᵢ ./ (λᵢ .* Λ)
-	ΔT = 0.0001
 end
 
 # ╔═╡ e067da7e-5f39-45db-bb05-6eb9ce35eb7c
@@ -161,14 +168,11 @@ A = Matrix{Float64}(undef,7,7);
 begin
 	uₜ = Matrix{Float64}(undef,size(A)[1],Int(cld((tspan[2]-tspan[1])/ΔT,1)))
 	t = LinRange(tspan[1],tspan[2],size(uₜ)[2])
-	tᵨ = Ρ.(t)
-end
+
+end;
 
 # ╔═╡ 8b7dd7a4-21ba-43f7-ad45-96c4afe2789c
 uₜ[:,1] .= u₀;
-
-# ╔═╡ 6d688c28-3ad0-42fb-8211-377dd1e251ba
-uₜ
 
 # ╔═╡ eeb519bd-55bd-4304-ab00-7e2f9f78c270
 function PonctualKineticsMatrix!(A::Matrix,p::Params,t::Float64 = 0.0)
@@ -181,9 +185,6 @@ function PonctualKineticsMatrix!(A::Matrix,p::Params,t::Float64 = 0.0)
 		
     end
 end;
-
-# ╔═╡ 47ea2c9f-4018-47bc-80b0-cf70d005eb0e
-PonctualKineticsMatrix!(A,param)
 
 # ╔═╡ f2487cc1-7520-4e91-a5a8-53db4284c4e5
 reactivity!(A::Matrix,p::Params,t::Float64 = 0.0) = A[1] = ((p(t) - p.β)/p.Λ)
@@ -198,85 +199,77 @@ reactivity!(A::Matrix,p::Params,t::Float64 = 0.0) = A[1] = ((p(t) - p.β)/p.Λ)
 # end
 
 # ╔═╡ 4c59d8e7-c9fd-4ea8-b850-b7f0eee52730
-function PonctualKinetics!(matrix::Matrix,uₜ::Matrix,ΔT::Float64,t::LinRange,param::Params)
+function PonctualKinetics(matrix::Matrix,uₜ::Matrix,ΔT::Float64,t::LinRange,param::Params)
 	@inbounds for i in 1:size(uₜ)[2]-1
 			u = @views uₜ[:,i]
 			uₜ[:,i+1] =  (matrix * u).*ΔT .+ u
 			reactivity!(matrix,param,t[i + 1])
 	end
-	
+	return uₜ
 end;
 
-# ╔═╡ c05b9f15-fcf0-42c4-80c8-dd5ddf3d8bbb
-plot(t,uₜ[1,:])
+# ╔═╡ 9d4ddc46-434a-4dc4-bf4d-598856c4dba9
+var = ["N", "C₁","C₂","C₃","C₄","C₅","C₆"];
 
-# ╔═╡ 1bb820d1-2854-4796-8657-7d0362d35e4c
+# ╔═╡ 62f18d8e-f386-4e20-908c-89b120d46a90
 begin
-ϕ₀= @bind phi_0 Slider(range(0,4,step=0.5),default = 2)
-ϕ₁= @bind phi_1 Slider(range(0,4,step=0.5),default = 0)
-ϕ₂ = @bind phi_2 Slider(range(0,4,step=0.5),default = 1)
+
+i = [1,2,3]
+a = @latexrun "rho(t) = 0.0001"
+b = @latexrun "rho(t) = -0.001"
+c = @latexrun "rho(t) = (1.5-t)*10^-5"
+ρₗ = [a,b,c]
 end;
 
-# ╔═╡ 52878e3a-0c89-4dfc-b2f1-7a32fb392e7b
-# begin
-# 	alloc_n!(transmutação,Nₜ,intervalo,h)
-# 	dicionario = Dict(elementos₀[i] =>Nₜ[i,:] for i in eachindex(elementos₀))
-#     @latexrun Nₑ = Nₜ[:,end]
-# end;
+# ╔═╡ acd8e957-9480-49fd-bc8c-e7a4811ddc93
+@bind Quest Slider(1:3)
 
-# ╔═╡ 1e692d4e-0844-4926-88dd-df3b1f9646ea
-begin
-t₀= @bind t_0 Slider(range(0,300,step=50),default = 100)
-t₁= @bind t_1 Slider(range(0,300,step=10),default = 30)
-t₂ = @bind t_2 Slider(range(0,300,step=50),default = 100)
-# h = @bind h_0 Slider(range(0,1,step=10^-1),default = 1)
-end;
+# ╔═╡ 21832cca-ea86-4ff9-9bcc-dc87a7c76e4e
+md"## Questão $(Quest)"
 
-# ╔═╡ d4146665-5b26-46fe-9e77-aa8a8f82944e
-md" Intervalos de tempo  \
-t₀ = $(t₀) $(t_0) horas \
-t₁ = $(t₁) $(t_1) horas\
-t₂ = $(t₂) $(t_2) horas" 
+# ╔═╡ 609db2e1-c394-4339-8f36-dff4e108b1c3
+ρₗ[Quest]
 
-# ╔═╡ 5392bb3a-5bc6-4721-91bb-f392244a8abe
-md" Valores de ϕ para cada intervalo \
-ϕ₀ = $(ϕ₀) $(phi_0) x 10¹⁴ \
-ϕ₁ = $(ϕ₁) $(phi_1) x 10¹⁴\
-ϕ₂ = $(ϕ₂) $(phi_2) x 10¹⁴" 
+# ╔═╡ 49b9faea-0c12-4a8c-ad9b-601d0d6ee3f5
+param = Params(ρ[Quest],λᵢ,βᵢ,β,Λ);
 
-# ╔═╡ 909b1895-aa9f-4938-a101-458af0efe241
-phi = [phi_0*10^14,phi_1*10^14,phi_2*10^14]
+# ╔═╡ 47ea2c9f-4018-47bc-80b0-cf70d005eb0e
+PonctualKineticsMatrix!(A,param)
+
+# ╔═╡ 2e1c1af7-33b7-4e69-bdb5-b06c5ffeadaf
+ret = PonctualKinetics(A,uₜ,ΔT,t,param);
 
 # ╔═╡ 8e742813-ca1f-4028-b8d5-0a78ca6c31a0
-@bind elementos₁ MultiCheckBox(elementos₀)
+@bind var₁ MultiCheckBox(var)
 
-# ╔═╡ 04043eb1-f5f0-43a0-b25b-9abbf2ffd290
-# begin
-	
-# 	elementos_copia = copy(elementos₁)
-# 	if elementos₁ == []
-# 		@info "Marque a checkbox com os elementos que deseja plotar junto."
-# 	else
-# 		plot(thr,dicionario[elementos_copia[1]],label=elementos_copia[1],legend=:bottomright,title="Concentração")
-# 		deleteat!(elementos_copia,findall(x->x==elementos_copia[1],elementos_copia))
-# 		for i in eachindex(elementos_copia)
-# 			plot!(thr,dicionario[elementos_copia[i]],label= elementos_copia[i])
-# 		end
-# 		xlabel!("t(horas)")
-# 		ylabel!("Concentração (Átomos / cm³)")
-# 	end
-	
-	
-	
-# end
-
-# ╔═╡ 535e0633-05fe-4c45-9f7f-6b8fe7e1f6c2
+# ╔═╡ 52878e3a-0c89-4dfc-b2f1-7a32fb392e7b
 begin
-    @latexrun elementos = elementos₀
+	dicionario = Dict(var[i] =>ret[i,:] for i in eachindex(var))
+    @latexrun uₑ = uₜ[:,end]
 end;
 
-# ╔═╡ 31283ab5-cc22-4459-a2f2-c1d4fb3f3c02
-uₜ
+# ╔═╡ 04043eb1-f5f0-43a0-b25b-9abbf2ffd290
+begin
+	
+	elementos_copia = copy(var₁)
+	if var₁ == []
+		@info "Marque a checkbox com os elementos que deseja plotar junto."
+	else
+		plot(t,dicionario[elementos_copia[1]],label=elementos_copia[1],legend=:bottomright,title="Concentração")
+		deleteat!(elementos_copia,findall(x->x==elementos_copia[1],elementos_copia))
+		for i in eachindex(elementos_copia)
+			plot!(t,dicionario[elementos_copia[i]],label= elementos_copia[i])
+		end
+		xlabel!("t(segundos)")
+		ylabel!("Concentração")
+	end
+	
+	
+	
+end
+
+# ╔═╡ 2846c1ba-0241-4b34-8f5f-b164d4491f1e
+uₑ
 
 # ╔═╡ 36025d2d-401d-4f0b-ae3c-3195c36f9971
 # begin
@@ -303,9 +296,6 @@ prob = ODEProblem(PonctualKinetics!,u₀,tspan,param)
 
 sol = solve(prob,Vern9(),dt=ΔT,reltol=10^-8)
 end
-
-# ╔═╡ 2e1c1af7-33b7-4e69-bdb5-b06c5ffeadaf
-PonctualKinetics!(A,uₜ,ΔT,t,param)
 
 # ╔═╡ 4968a7c8-45c7-444e-839e-1c172e9111b3
 begin
@@ -2049,12 +2039,13 @@ version = "1.4.1+1"
 # ╠═ef16e341-3147-4271-bed1-613e673b4cef
 # ╠═bae640ce-5d9c-4842-9781-a5dae4d5a54d
 # ╟─4f9c70b3-9996-4642-80e5-19fa269d6d2c
+# ╟─e988b980-7f64-4168-b58f-6e8b69460341
+# ╟─9e67616e-fc98-4f09-9212-54c29081766c
 # ╠═d5adf4c5-712d-46ed-8877-39282ae9d212
 # ╠═6d422698-577e-42d4-9d20-5e48b6bdbbaf
 # ╠═9a2a1ce1-f264-48e5-8926-ddce319ee4b0
 # ╠═788650a2-91f5-4ed4-8ada-e5fb689d0b6a
 # ╠═8b7dd7a4-21ba-43f7-ad45-96c4afe2789c
-# ╠═6d688c28-3ad0-42fb-8211-377dd1e251ba
 # ╟─e067da7e-5f39-45db-bb05-6eb9ce35eb7c
 # ╟─98aa9487-6b49-4bed-a5ff-3c1fa4726371
 # ╟─9d8c3e70-61cc-11ed-3e42-c3ca983cf479
@@ -2067,18 +2058,17 @@ version = "1.4.1+1"
 # ╠═f2487cc1-7520-4e91-a5a8-53db4284c4e5
 # ╟─86a91448-5f8e-42bb-9b18-0a3b83cc3e99
 # ╠═4c59d8e7-c9fd-4ea8-b850-b7f0eee52730
-# ╠═2e1c1af7-33b7-4e69-bdb5-b06c5ffeadaf
-# ╠═c05b9f15-fcf0-42c4-80c8-dd5ddf3d8bbb
-# ╟─1bb820d1-2854-4796-8657-7d0362d35e4c
+# ╠═9d4ddc46-434a-4dc4-bf4d-598856c4dba9
+# ╠═62f18d8e-f386-4e20-908c-89b120d46a90
+# ╟─21832cca-ea86-4ff9-9bcc-dc87a7c76e4e
+# ╟─acd8e957-9480-49fd-bc8c-e7a4811ddc93
+# ╟─609db2e1-c394-4339-8f36-dff4e108b1c3
+# ╟─49b9faea-0c12-4a8c-ad9b-601d0d6ee3f5
+# ╟─2e1c1af7-33b7-4e69-bdb5-b06c5ffeadaf
+# ╟─8e742813-ca1f-4028-b8d5-0a78ca6c31a0
 # ╟─52878e3a-0c89-4dfc-b2f1-7a32fb392e7b
-# ╟─1e692d4e-0844-4926-88dd-df3b1f9646ea
-# ╟─d4146665-5b26-46fe-9e77-aa8a8f82944e
-# ╟─5392bb3a-5bc6-4721-91bb-f392244a8abe
-# ╟─909b1895-aa9f-4938-a101-458af0efe241
-# ╠═8e742813-ca1f-4028-b8d5-0a78ca6c31a0
-# ╠═04043eb1-f5f0-43a0-b25b-9abbf2ffd290
-# ╟─535e0633-05fe-4c45-9f7f-6b8fe7e1f6c2
-# ╠═31283ab5-cc22-4459-a2f2-c1d4fb3f3c02
+# ╟─04043eb1-f5f0-43a0-b25b-9abbf2ffd290
+# ╠═2846c1ba-0241-4b34-8f5f-b164d4491f1e
 # ╟─36025d2d-401d-4f0b-ae3c-3195c36f9971
 # ╠═c0e68316-9e34-4488-8b16-ee3b847e409b
 # ╠═4968a7c8-45c7-444e-839e-1c172e9111b3
